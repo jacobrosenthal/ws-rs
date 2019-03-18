@@ -8,31 +8,17 @@ extern crate ws;
 
 use std::io;
 use std::io::prelude::*;
-use std::sync::mpsc::Sender as TSender;
 use std::sync::mpsc::channel;
+use std::sync::mpsc::Sender as TSender;
 use std::thread;
 
-use clap::{App, Arg};
 use ws::{connect, CloseCode, Error, ErrorKind, Handler, Handshake, Message, Result, Sender};
 
 fn main() {
     // Setup logging
     env_logger::init();
 
-    // setup command line arguments
-    let matches = App::new("WS Command Line Client")
-        .version("1.1")
-        .author("Jason Housley <housleyjk@gmail.com>")
-        .about("Connect to a WebSocket and send messages from the command line.")
-        .arg(
-            Arg::with_name("URL")
-                .help("The URL of the WebSocket server.")
-                .required(true)
-                .index(1),
-        )
-        .get_matches();
-
-    let url = matches.value_of("URL").unwrap().to_string();
+    let url = "ws://127.0.0.1:3012";
 
     let (tx, rx) = channel();
 
@@ -42,12 +28,12 @@ fn main() {
         connect(url, |sender| Client {
             ws_out: sender,
             thread_out: tx.clone(),
-        }).unwrap();
+        })
+        .unwrap();
     });
 
     if let Ok(Event::Connect(sender)) = rx.recv() {
         // If we were able to connect, print the instructions
-        instructions();
 
         // Main loop
         loop {
@@ -59,52 +45,8 @@ fn main() {
                 break;
             }
 
-            if input.starts_with("/h") {
-                // Show help
-                instructions()
-            } else if input.starts_with("/c") {
-                // If the close arguments are good, close the connection
-                let args: Vec<&str> = input.split(' ').collect();
-                if args.len() == 1 {
-                    // Simple close
-                    println!("Closing normally, please wait...");
-                    sender.close(CloseCode::Normal).unwrap();
-                } else if args.len() == 2 {
-                    // Close with a specific code
-                    if let Ok(code) = args[1].trim().parse::<u16>() {
-                        let code = CloseCode::from(code);
-                        println!("Closing with code: {:?}, please wait...", code);
-                        sender.close(code).unwrap();
-                    } else {
-                        display(&format!("Unable to parse {} as close code.", args[1]));
-                        // Keep accepting input if the close arguments are invalid
-                        continue;
-                    }
-                } else {
-                    // Close with a code and a reason
-                    if let Ok(code) = args[1].trim().parse::<u16>() {
-                        let code = CloseCode::from(code);
-                        let reason = args[2..].join(" ");
-                        println!(
-                            "Closing with code: {:?} and reason: {}, please wait...",
-                            code,
-                            reason.trim()
-                        );
-                        sender
-                            .close_with_reason(code, reason.trim().to_string())
-                            .unwrap();
-                    } else {
-                        display(&format!("Unable to parse {} as close code.", args[1]));
-                        // Keep accepting input if the close arguments are invalid
-                        continue;
-                    }
-                }
-                break;
-            } else {
-                // Send the message
-                display(&format!(">>> {}", input.trim()));
-                sender.send(input.trim()).unwrap();
-            }
+            display(&format!(">>> {}", input.trim()));
+            sender.send(input.trim()).unwrap();
         }
     }
 
@@ -117,14 +59,6 @@ fn display(string: &str) {
     view.carriage_return().unwrap();
     view.delete_line().unwrap();
     println!("{}", string);
-    print!("?> ");
-    io::stdout().flush().unwrap();
-}
-
-fn instructions() {
-    println!("Type /close [code] [reason] to close the connection.");
-    println!("Type /help to show these instructions.");
-    println!("Other input will be sent as messages.\n");
     print!("?> ");
     io::stdout().flush().unwrap();
 }
